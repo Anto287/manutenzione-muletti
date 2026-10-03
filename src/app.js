@@ -1,4 +1,4 @@
-import {today,due,complete,validateBackup,blank,vehicleTypes,unitLabel,counterLabel} from './domain.js';
+import {today,due,complete,validateBackup,blank,vehicleTypes,unitLabel,counterLabel} from './domain.js?v=2';
 const KEY='liftcare-v1',app=document.querySelector('#app'),dialog=document.querySelector('#editor');let data=blank(),view='overview',filter='all',typeFilter='all',query='',startupError='';
 try{const raw=localStorage.getItem(KEY);if(raw)data=validateBackup(JSON.parse(raw));}catch{startupError='Dati salvati non leggibili. Esporta una copia prima di inserire nuovi dati.';}
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
