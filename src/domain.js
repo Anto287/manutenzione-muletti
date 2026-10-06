@@ -2,6 +2,11 @@ export const today = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
+export const MAX_PHOTOS = 6;
+export const MAX_PHOTO_BYTES = 160000;
+export function validPhotos(photos) {
+  return photos === undefined || (Array.isArray(photos) && photos.length <= MAX_PHOTOS && photos.every(p => p && typeof p.name === 'string' && p.name.length <= 200 && typeof p.dataUrl === 'string' && p.dataUrl.length <= Math.ceil(MAX_PHOTO_BYTES / 3) * 4 + 40 && /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(p.dataUrl)));
+}
 export const vehicleTypes = { forklift: 'Muletto', car: 'Auto', tractor: 'Trattore' };
 export const unitLabel = v => v.unit === 'km' ? 'km' : 'h';
 export const counterLabel = v => v.unit === 'km' ? 'Chilometri' : 'Ore di lavoro';
@@ -31,6 +36,7 @@ export function complete(data, vehicleId, taskIds, entry) {
   if (vehicle.unit === 'km' && !Number.isInteger(entry.reading)) throw Error('Inserisci chilometri interi.');
   if (!validDate(entry.date) || entry.date > today()) throw Error('Inserisci una data valida, non futura.');
   if (!num(entry.cost)) throw Error('Inserisci un costo valido.');
+  if (!validPhotos(entry.photos)) throw Error('Allegati foto non validi.');
   const tasks = data.tasks.filter(t => t.vehicleId === vehicleId && taskIds.includes(t.id));
   if (tasks.length !== taskIds.length) throw Error('Interventi non validi.');
   if (tasks.some(t => entry.date < t.lastDate || entry.reading < t.lastReading)) throw Error('La registrazione precede l’ultimo intervento del piano.');
@@ -46,7 +52,7 @@ function validateV1(d) {
   const ids = new Set(d.vehicles.map(v => v.id));
   if (ids.size !== d.vehicles.length || new Set(d.tasks.map(t => t.id)).size !== d.tasks.length) throw Error('Identificativi duplicati.');
   if (d.tasks.some(t => !identifier(t.id) || !ids.has(t.vehicleId) || !str(t.name) || !str(t.part) || !num(t.hours) || !num(t.months) || !Number.isInteger(t.months) || !(t.hours || t.months) || !num(t.lastHours) || !validDate(t.lastDate) || t.lastHours > d.vehicles.find(v => v.id === t.vehicleId).hours)) throw Error('Piano non valido.');
-  if (d.history.some(h => !identifier(h.id) || !str(h.vehicleName) || !ids.has(h.vehicleId) || !validDate(h.date) || !num(h.hours) || !num(h.cost) || !str(h.technician) || !str(h.notes) || !Array.isArray(h.items) || h.items.some(i => !str(i.name) || !str(i.part)))) throw Error('Storico non valido.');
+  if (d.history.some(h => !identifier(h.id) || !str(h.vehicleName) || !ids.has(h.vehicleId) || !validDate(h.date) || !num(h.hours) || !num(h.cost) || !str(h.technician) || !str(h.notes) || !validPhotos(h.photos) || !Array.isArray(h.items) || h.items.some(i => !str(i.name) || !str(i.part)))) throw Error('Storico non valido.');
 }
 export function validateBackup(d) {
   if (d?.version === 1) {
@@ -64,7 +70,7 @@ export function validateBackup(d) {
   const ids = new Set(d.vehicles.map(v => v.id));
   if (ids.size !== d.vehicles.length || new Set(d.tasks.map(t => t.id)).size !== d.tasks.length) throw Error('Identificativi duplicati.');
   if (d.tasks.some(t => !identifier(t.id) || !ids.has(t.vehicleId) || !str(t.name) || !str(t.part) || !num(t.interval) || !num(t.months) || !Number.isInteger(t.months) || !(t.interval || t.months) || !num(t.lastReading) || !validDate(t.lastDate) || t.lastReading > d.vehicles.find(v => v.id === t.vehicleId).reading || (d.vehicles.find(v => v.id === t.vehicleId).unit === 'km' && (!Number.isInteger(t.interval) || !Number.isInteger(t.lastReading))))) throw Error('Piano non valido.');
-  if (d.history.some(h => !identifier(h.id) || !str(h.vehicleName) || !ids.has(h.vehicleId) || !validDate(h.date) || !num(h.reading) || !['h', 'km'].includes(h.unit) || !Object.hasOwn(vehicleTypes, h.vehicleType) || !num(h.cost) || !str(h.technician) || !str(h.notes) || !Array.isArray(h.items) || h.items.some(i => !str(i.name) || !str(i.part)))) throw Error('Storico non valido.');
+  if (d.history.some(h => !identifier(h.id) || !str(h.vehicleName) || !ids.has(h.vehicleId) || !validDate(h.date) || !num(h.reading) || !['h', 'km'].includes(h.unit) || !Object.hasOwn(vehicleTypes, h.vehicleType) || !num(h.cost) || !str(h.technician) || !str(h.notes) || !validPhotos(h.photos) || !Array.isArray(h.items) || h.items.some(i => !str(i.name) || !str(i.part)))) throw Error('Storico non valido.');
   return d;
 }
 export const blank = () => ({ version: 2, vehicles: [], tasks: [], history: [] });

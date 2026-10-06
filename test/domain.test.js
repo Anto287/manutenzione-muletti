@@ -17,3 +17,17 @@ test('auto: scadenza chilometrica e preavviso specifico per km',()=>{const d=car
 test('auto: registrazione conserva km e categoria, ricalcola da nuovo contatore',()=>{const d=car();const n=complete(d,'car',['oil'],{reading:65000,date:'2026-08-01',cost:190,technician:'Officina',notes:''});assert.equal(n.history[0].unit,'km');assert.equal(n.history[0].vehicleType,'car');assert.equal(due(n.tasks[0],n.vehicles[0],'2026-08-01').reading,80000);validateBackup(n);assert.throws(()=>complete(d,'car',['oil'],{reading:65000.5,date:'2026-08-01',cost:0}))});
 test('trattori: ore decimali, archivio misto e controlli mensili senza intervallo contatore',()=>{const d=car(),v={id:'tr',type:'tractor',unit:'h',reading:1500.5,name:'Trattore 01',model:'Trattore',power:'Diesel',plate:'',serial:'TR001'};d.vehicles.push(v);const t={id:'hyd',vehicleId:'tr',name:'Filtro idraulico',part:'H01',interval:250,months:0,lastReading:1250,lastDate:'2026-01-01'};d.tasks.push(t);validateBackup(d);assert.equal(due(t,v,'2026-04-01').status,'Scaduto');t.interval=0;t.months=6;assert.equal(due(t,v,'2026-04-01').reading,null);assert.equal(due(t,v,'2026-07-01').status,'Scaduto');assert.equal(d.vehicles[0].reading,64500)});
 test('backup v2 rifiuta categorie, unità e chilometri frazionari non validi',()=>{const d=car();d.vehicles[0].type='unknown';assert.throws(()=>validateBackup(d));d.vehicles[0].type='car';d.vehicles[0].unit='mile';assert.throws(()=>validateBackup(d));d.vehicles[0].unit='km';d.tasks[0].interval=.5;assert.throws(()=>validateBackup(d))});
+const photo=()=>({name:'ricambio.jpg',dataUrl:'data:image/jpeg;base64,/9j/AAAA'});
+test('foto conservate nello storico e nel backup, vecchi interventi ancora compatibili',()=>{
+ const d=data(),entry={date:'2026-08-01',reading:520,cost:45,technician:'Mario',notes:'Ricambio',photos:[photo()]};
+ const n=complete(d,'v',['t'],entry);assert.deepEqual(n.history[0].photos,entry.photos);
+ assert.deepEqual(validateBackup(JSON.parse(JSON.stringify(n))).history[0].photos,entry.photos);
+ assert.equal(d.history.length,0);
+});
+test('rifiuta allegati attivi, formati invalidi, troppe foto o foto troppo grandi',()=>{
+ const entry={date:'2026-08-01',reading:520,cost:0,technician:'',notes:''};
+ for(const photos of [null,{},Array(7).fill(photo()),[{name:'x',dataUrl:'javascript:alert(1)'}],[{name:'x',dataUrl:'data:image/svg+xml;base64,AAAA'}],[{name:'x',dataUrl:'data:image/jpeg;base64,'+'A'.repeat(220000)}]]){
+  assert.throws(()=>complete(data(),'v',['t'],{...entry,photos}));
+  const n=complete(data(),'v',['t'],{...entry,photos:[]});n.history[0].photos=photos;assert.throws(()=>validateBackup(n));
+ }
+});
