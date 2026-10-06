@@ -36,11 +36,11 @@ Le immagini sono file privati, non Base64 nel database: `UUID_utente/ID_interven
 
 L’inventario delle foto usa una sola RPC, senza scaricare immagini in panoramica. I download avvengono soltanto aprendo una galleria o esportando il backup. Il vecchio archivio locale non viene cancellato. **Importa archivio di questo browser** oppure **Importa backup** trasferiscono prima i dati testuali, poi le foto. Se un upload fallisce conserva il backup originale; un intervento già registrato non viene duplicato per riprovare le foto. Il backup online JSON comprende le foto; CSV contiene solo dati testuali. Non esiste coda offline.
 
-## Notifiche email: predisposte, chiave mancante
+## Notifiche email attive
 
 Il worker `access-email` è distribuito su Supabase. Le richieste confermate entrano in una coda privata; un webhook avvia l’invio e un job orario riprova fino a 5 volte. Non vengono invocate API email finché non esiste una configurazione.
 
-L’admin configura la chiave di un account **Resend Free** da **Notifiche email**. La chiave è cifrata in Supabase Vault; non viene restituita al browser, scritta nei backup o inserita nel repository. Il mittente di prova `onboarding@resend.dev` può inviare soltanto all’indirizzo con cui è stato creato l’account Resend: usa la stessa email admin. Per inviare a destinatari diversi serve un dominio verificato. Le notifiche qui descritte sono esclusivamente per l’admin; non includono le email di conferma Auth.
+La chiave di un account **Resend Free** è già configurata sul progetto online; l’admin può sostituirla da **Notifiche email**. Il test di invio è stato consegnato all’admin. La chiave è cifrata in Supabase Vault; non viene restituita al browser, scritta nei backup o inserita nel repository. Il mittente di prova `onboarding@resend.dev` può inviare soltanto all’indirizzo con cui è stato creato l’account Resend: usa la stessa email admin. Per inviare a destinatari diversi serve un dominio verificato. Le notifiche qui descritte sono esclusivamente per l’admin; non includono le email di conferma Auth.
 
 Il worker usa autenticazione personalizzata con un token casuale generato sul server e custodito in Vault: `verify_jwt=false` permette il webhook, ma token assenti o errati vengono respinti. La RPC che verifica il token e legge la chiave è eseguibile esclusivamente da `service_role`. Sono applicati limiti conservativi di tentativi sotto le soglie Free (80 al giorno, 2.500 al mese), con chiavi di idempotenza per limitare duplicazioni nei retry.
 
@@ -54,3 +54,12 @@ Il worker usa autenticazione personalizzata con un token casuale generato sul se
 - `backend/check-database.mjs`: verifica offline dello schema iniziale con PGlite.
 
 Le migrazioni sono versionate in `backend/supabase/migrations`. La configurazione admin rimane privata nel database. Dopo modifiche di schema verificare anche gli advisor Supabase. RLS senza policy sulle tabelle private è intenzionale: i client non hanno accesso diretto.
+
+
+### Conferma dell’account admin senza SMTP personalizzato
+
+La migrazione `admin_registration_email` aggiunge un limite privato per gli invii e una RPC eseguibile solo da `service_role`. L’Edge Function `registration-email` è pubblica perché avvia la registrazione: verifica input, origine browser, destinatario nella lista admin e limite server di 5 tentativi/giorno con 60 secondi tra richieste. Non concede accesso ai dati. Genera il token con l’API admin `generate_link` di Supabase Auth e lo invia con Resend solo all’admin, mai nella risposta HTTP. Il client riceve `supported:false` per gli altri indirizzi e usa il flusso signup standard.
+
+Il link contiene `token_hash` nel frammento dell’URL; `src/auth.js` rimuove subito il frammento e usa `/auth/v1/verify`. La sessione viene accettata solo dopo verifica. Email confermata e indirizzo nella lista privata restano necessari per il bootstrap admin. Il mittente di prova è utilizzabile nel progetto attuale perché il test al destinatario admin è stato consegnato. Le conferme a utenti esterni restano un percorso separato che richiede SMTP e dominio verificato.
+
+Entrambi i worker sono pubblicati; la chiave `sending_access` è configurata in Vault e non è versionata. Non sono stati acquistati domini né attivati piani a pagamento.

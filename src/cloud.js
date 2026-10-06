@@ -1,6 +1,6 @@
-import {photoBlob} from './photos.js?v=5';
-import {LiftCareBackend} from './backend.js?v=5';
-import {validateBackup} from './domain.js?v=5';
+import {photoBlob} from './photos.js?v=6';
+import {LiftCareBackend} from './backend.js?v=6';
+import {validateBackup} from './domain.js?v=6';
 export const api=new LiftCareBackend({url:'https://tkugxpgljwcnndjsmhjq.supabase.co',publishableKey:'sb_publishable_SeENF7vcFSV73GPFmvNGWw_DkBQ7xla'});
 const SESSION='liftcare-session-v1';
 export function saveSession(){if(api.session)sessionStorage.setItem(SESSION,JSON.stringify(api.session));else sessionStorage.removeItem(SESSION)}

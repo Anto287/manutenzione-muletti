@@ -1,4 +1,4 @@
-import {MAX_PHOTO_BYTES,validPhotos} from './domain.js?v=5';
+import {MAX_PHOTO_BYTES,validPhotos} from './domain.js?v=6';
 
 export async function preparePhoto(file) {
   if (!file.type.startsWith('image/')) throw Error('Seleziona un file immagine.');
