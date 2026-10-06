@@ -1,58 +1,56 @@
-# Backend LiftCare — gestione macchinari
+# Backend LiftCare
 
-Backend Supabase PostgreSQL + Auth + Storage. Non richiede un server Node acceso; la REST API viene generata da Supabase. Il sito GitHub Pages resta compatibile. L’interfaccia è ora collegata tramite `src/cloud.js`: login, rinnovo della sessione, salvataggio online, approvazioni admin, importazione iniziale e backup con foto. Le migrazioni 001–004 sono applicate al progetto LiftCare. **Le notifiche email restano in coda finché il servizio di invio non viene configurato.**
+LiftCare è collegato al progetto Supabase `tkugxpgljwcnndjsmhjq`. Organizzazione e progetto usano il piano Free verificato; nessuna configurazione dell’app attiva piani a pagamento. GitHub Pages ospita il frontend; Supabase fornisce PostgreSQL, Auth, REST API, Storage e il worker email. Non serve un server Node acceso.
 
+## Accesso
 
-## Attivazione
+1. Crea l’account dall’interfaccia e conferma l’email.
+2. Solo l’indirizzo admin configurato nella tabella privata `admin_emails` ottiene automaticamente il ruolo admin dopo conferma.
+3. Gli altri account rimangono in attesa finché l’admin li approva da **Approva utenti**. Ogni account ha un archivio indipendente; non è una flotta condivisa.
+4. Login, conferma email, token scaduti, sessioni revocate e approvazione sono controllati dal server. Le API dati rispondono 401 se la sessione non è attiva o l’account non è approvato. Le operazioni riservate agli admin rispondono 403 agli utenti ordinari.
 
-1. Crea un progetto **Free** sul tuo account Supabase, scegliendo una regione europea. Non attivare piani a pagamento.
-2. Esegui il file `supabase/migrations/202610060001_liftcare.sql` nel SQL Editor, una volta, su un progetto nuovo. In alternativa applicalo con la CLI Supabase. La migrazione è transazionale e non cancella dati esistenti.
-3. In Authentication crea il tuo utente con email e password. Per un gestionale privato disabilita le registrazioni pubbliche. Ogni utente ha un archivio indipendente; la condivisione della flotta tra utenti diversi non è inclusa.
-4. Recupera Project URL e **publishable key** (oppure la vecchia anon key). Non inserire mai service_role, secret key, password database o credenziali utente nella repository.
-5. Collega l'adattatore all'interfaccia e configura login/logout, rinnovo sessione, indicazione del salvataggio cloud e gestione degli errori prima di utilizzare il backend come archivio principale.
+Le autorizzazioni sono in tabelle private, non in `user_metadata`. Ogni richiesta dati applica un controllo preliminare e RLS. Le foto applicano RLS separatamente. Un utente revocato non può continuare a usare il token precedente; dopo logout la sessione viene verificata nella tabella Auth e non è più valida per i dati.
 
-## Dati e operazioni
+Il frontend contiene soltanto una chiave pubblica. Le credenziali di servizio e le password non sono pubblicate. La sessione del browser è in `sessionStorage`, si rinnova e viene rimossa con **Esci**. La sicurezza dipende anche dall’account dell’admin e del progetto: questi controlli non equivalgono a una garanzia di invulnerabilità.
 
-| Risorsa REST | Operazioni | Contenuto |
+## API
+
+| Risorsa | Operazioni | Protezione |
 | --- | --- | --- |
-| `/rest/v1/machines` | GET, POST, PATCH, DELETE | Muletti, auto, trattori; targa, matricola, alimentazione, ore/km |
-| `/rest/v1/maintenance_plans` | GET, POST, PATCH, DELETE | Intervalli, mesi, ricambi, ultimo lavoro |
-| `/rest/v1/service_records` | GET | Storico con copia dei nomi e ricambi al momento del lavoro |
-| `/rest/v1/rpc/record_service` | POST | Registra il lavoro e aggiorna mezzo e piani nella stessa transazione |
-| `/storage/v1/.../liftcare-photos` | Upload, elenco, URL temporaneo, cancellazione | Foto private collegate a un intervento |
+| `machines` | GET, POST, PATCH, DELETE | Sessione, approvazione, proprietario |
+| `maintenance_plans` | GET, POST, PATCH, DELETE | Sessione, approvazione, proprietario |
+| `service_records` | GET | Storico immutabile, proprietario |
+| `record_service` | POST RPC | Registra storico e aggiorna mezzo/piani in una transazione |
+| `import_archive` | POST RPC | Importazione transazionale in archivio vuoto |
+| `access_status` | POST RPC | Stato del solo account autenticato, anche in attesa |
+| `list_access_requests`, `set_user_approval` | POST RPC | Solo admin |
+| `photo_usage`, `photo_inventory` | POST RPC | Solo utenti approvati; inventario limitato al proprietario |
+| `email_status`, `configure_email` | POST RPC | Solo admin; nessuna lettura della chiave |
+| Storage `liftcare-photos` | Upload, download privato, cancellazione | Sessione, approvazione, proprietario, piano gratuito |
 
-Tutte le richieste dati richiedono la sessione utente. RLS isola i proprietari; chiavi esterne composte impediscono collegamenti a mezzi di un altro account. Il contatore non diminuisce; i km sono interi; l'unità resta bloccata quando ci sono piani o storico. Un mezzo con piani o storico non può essere cancellato. Lo storico è immutabile via API: eliminare un piano non elimina i lavori eseguiti. La registrazione rifiuta date future, piani duplicati o estranei e lavori precedenti all'ultimo lavoro del piano. Le date sono valutate in Europe/Rome.
+I contatori non possono diminuire; i chilometri sono interi. L’unità resta bloccata in presenza di piani o storico. I riferimenti composti impediscono collegamenti a mezzi di altri utenti. Lo storico mantiene nomi e ricambi anche dopo eliminazione del piano.
 
-```js
-import {LiftCareBackend} from '../src/backend.js';
-const api = new LiftCareBackend({url:'https://PROJECT.supabase.co',publishableKey:'PUBLIC_KEY'});
-await api.signIn(email,password);
-const machine = await api.saveMachine({name:'TR-01',type:'tractor',model:'Trattore',unit:'h',reading:120});
-const plan = await api.savePlan({machine_id:machine.id,name:'Filtro gasolio',interval:250,months:12,last_reading:120,last_date:'2026-10-06'});
-const service = await api.recordService({machineId:machine.id,planIds:[plan.id],date:'2026-10-06',reading:125});
-// Utilizzare la compressione già presente in src/photos.js prima dell'upload.
-await api.uploadPhoto(service.id,1,compressedJpegBlob);
-const temporaryUrl = await api.signedPhotoUrl(service.id,1);
-```
+## Foto e migrazione
 
-## Foto, spazio e limiti
+Le immagini sono file privati, non Base64 nel database: `UUID_utente/ID_intervento/slot.jpg`. Fino a 6 foto per intervento, massimo 160.000 byte ciascuna, JPEG/PNG/WebP; compressione nel browser con lato massimo 1280 px. Il contatore mostra l’uso Storage del progetto; avviso all’80%, blocco preventivo a 1.000.000.000 byte. Gli inserimenti vengono serializzati dal server e i file ancora privi di metadata vengono conteggiati conservativamente a 160 KB. Nessun upgrade automatico viene richiesto dall’app.
 
-Le immagini non sono Base64 nel database: sono file privati, organizzati `UUID_utente/ID_intervento/slot.jpg`. Limite per file 160.000 byte, formati JPEG/PNG/WebP, slot da 1 a 6. La compressione esistente usa un lato massimo di 1280 px. Il nome del file identifica lo slot; il nome originale non è conservato dal backend. Un URL firmato dura cinque minuti. Un upload fallito non annulla il lavoro già registrato: può essere riprovato nello stesso slot. Non sono permessi overwrite.
+L’inventario delle foto usa una sola RPC, senza scaricare immagini in panoramica. I download avvengono soltanto aprendo una galleria o esportando il backup. Il vecchio archivio locale non viene cancellato. **Importa archivio di questo browser** oppure **Importa backup** trasferiscono prima i dati testuali, poi le foto. Se un upload fallisce conserva il backup originale; un intervento già registrato non viene duplicato per riprovare le foto. Il backup online JSON comprende le foto; CSV contiene solo dati testuali. Non esiste coda offline.
 
-Il piano Free attualmente include 500 MB di database e 1 GB di file **per progetto**, condivisi da tutti gli utenti. Non è una quota infinita. Non si attiva automaticamente un piano a pagamento. Indicatore di spazio, avviso all'80% e blocco preventivo richiedono un'integrazione ulteriore; non sono implementati da questo adattatore. La quota effettiva viene applicata dal servizio. Per i consumi complessivi utilizzare la dashboard Supabase. Eventuali altre policy Storage già presenti sul progetto vanno controllate: le policy permissive si combinano con OR.
+## Notifiche email: predisposte, chiave mancante
 
-## Migrazione e backup
+Il worker `access-email` è distribuito su Supabase. Le richieste confermate entrano in una coda privata; un webhook avvia l’invio e un job orario riprova fino a 5 volte. Non vengono invocate API email finché non esiste una configurazione.
 
-L'archivio locale non viene toccato. Gli ID testuali delle tabelle accettano gli identificativi già esistenti. Per migrare servono mappatura `vehicles → machines`, `tasks → maintenance_plans`, importazione transazionale dello storico e caricamento separato delle foto; **l'importazione dei vecchi backup non è ancora implementata**. Non caricare backup privati nella repository pubblica. Il piano Free non include backup automatici e può andare in pausa dopo una settimana di inattività. Conservare esportazioni del database e copie dei file Storage: il solo dump SQL non include le foto.
+L’admin configura la chiave di un account **Resend Free** da **Notifiche email**. La chiave è cifrata in Supabase Vault; non viene restituita al browser, scritta nei backup o inserita nel repository. Il mittente di prova `onboarding@resend.dev` può inviare soltanto all’indirizzo con cui è stato creato l’account Resend: usa la stessa email admin. Per inviare a destinatari diversi serve un dominio verificato. Le notifiche qui descritte sono esclusivamente per l’admin; non includono le email di conferma Auth.
 
-## Verifica
+Il worker usa autenticazione personalizzata con un token casuale generato sul server e custodito in Vault: `verify_jwt=false` permette il webhook, ma token assenti o errati vengono respinti. La RPC che verifica il token e legge la chiave è eseguibile esclusivamente da `service_role`. Sono applicati limiti conservativi di tentativi sotto le soglie Free (80 al giorno, 2.500 al mese), con chiavi di idempotenza per limitare duplicazioni nei retry.
 
-`npm test` esegue anche i test dell'adattatore REST. `node backend/check-database.mjs` verifica la migrazione e i controlli usando PostgreSQL WASM (PGlite); richiede `@electric-sql/pglite` in un ambiente di test, senza dipendenze aggiunte al sito. Lo Storage mock nei test verifica le policy SQL, non sostituisce una prova di upload sul vero servizio Supabase. Dopo l'attivazione eseguire una prova con due utenti e una richiesta non autenticata, oltre a upload, firma e cancellazione delle foto.
+**Le email di conferma degli account sono gestite separatamente da Supabase Auth.** Il mittente predefinito Supabase può inviare soltanto agli indirizzi del team autorizzato. Per registrare utenti esterni serve configurare SMTP personalizzato; Resend richiede un dominio verificato per quei destinatari. Nessun dominio o piano viene acquistato automaticamente. Le impostazioni Auth e SMTP non sono modificabili attraverso le funzioni disponibili della connessione Supabase.
 
-## Approvazione e sicurezza
+## Verifica e distribuzione
 
-Le funzioni privilegiate sono nello schema `private`, non esposto alla Data API. Le RPC pubbliche sono wrapper SECURITY INVOKER con concessioni esplicite. `private.app_members` conserva approvazione e ruolo admin; nessun client può scriverla direttamente. Solo l’admin approvato può usare `set_user_approval`. L’identità admin è in `private.admin_emails` e viene riconosciuta solo dopo conferma email; non viene pubblicata nella configurazione del sito. La registrazione di un utente verificato crea la richiesta e la voce nella coda email. Non aggiungere indirizzi admin non verificati.
+- `npm test`: logica dominio, adapter REST e collegamento cloud.
+- `npm run build`: sito statico in `dist/`.
+- `backend/check-live-access.sql`: verifica server su utenti di prova in transazione, con rollback integrale: bootstrap admin, blocco utenti in attesa, impossibilità di auto-approvazione, isolamento, transazioni e revoca.
+- `backend/check-database.mjs`: verifica offline dello schema iniziale con PGlite.
 
-Un hook PostgREST controlla le richieste dati: 401 senza autenticazione, 403 senza approvazione. `access_status` è l’eccezione necessaria per mostrare la schermata di attesa; restituisce solo lo stato dell’utente chiamante. Le policy restrictive richiedono approvazione anche per Storage. Le immagini nell’interfaccia si scaricano con Bearer token; non si usano link pubblici o firmati persistenti. La revoca viene letta dal database a ogni richiesta. I byte già scaricati non possono essere revocati dal dispositivo.
-
-Verificati sul progetto reale: isolamento tra due utenti, divieto di autoapprovazione, approvazione e revoca immediata, 401 HTTP con la sola chiave pubblica. Test di integrazione DOM con API simulate: login, creazione mezzo/piano, schermata di attesa dopo revoca e logout. Il browser Chromium non è disponibile nell’ambiente; resta da verificare l’intero ciclo reale di registrazione e consegna email con l’account dell’admin.
+Le migrazioni sono versionate in `backend/supabase/migrations`. La configurazione admin rimane privata nel database. Dopo modifiche di schema verificare anche gli advisor Supabase. RLS senza policy sulle tabelle private è intenzionale: i client non hanno accesso diretto.

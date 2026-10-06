@@ -30,7 +30,7 @@ test('immutable resources and owner fields cannot be submitted',async()=>{
   assert.equal(calls.length,0);
 });
 test('service registration uses one transactional RPC with plan ids',async()=>{
-  const {api,calls}=setup(); api.session={access_token:'token'};
+  const {api,calls}=setup([{status:200,data:[{id:'s1'}]}]); api.session={access_token:'token'};
   await api.recordService({machineId:'m1',planIds:['p1'],date:'2026-10-06',reading:125});
   assert.match(calls[0].url,/rpc\/record_service$/);
   assert.deepEqual(JSON.parse(calls[0].options.body).p_plan_ids,['p1']);
@@ -49,3 +49,7 @@ test('errors are surfaced and logout clears the local session even on failure',a
   await assert.rejects(api.signOut(),/Expired/);
   assert.equal(api.session,null);
 });
+
+test('service result is normalized from PostgREST composite responses',async()=>{for(const data of [{id:'service'},[{id:'service'}]]){const {api}=setup([{status:200,data}]);api.session={access_token:'token'};assert.equal((await api.recordService({machineId:'m',planIds:['p'],date:'2026-10-06',reading:1})).id,'service')}});
+
+test('default fetch is invoked with the browser global receiver',async()=>{let receiver;const api=new LiftCareBackend({url:'https://example.supabase.co',publishableKey:'public',fetch:function(){receiver=this;return Promise.resolve(Response.json([]))}});api.session={access_token:'token'};await api.list('machines');assert.equal(receiver,globalThis)});

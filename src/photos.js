@@ -1,4 +1,4 @@
-import {MAX_PHOTO_BYTES} from './domain.js?v=3';
+import {MAX_PHOTO_BYTES,validPhotos} from './domain.js?v=5';
 
 export async function preparePhoto(file) {
   if (!file.type.startsWith('image/')) throw Error('Seleziona un file immagine.');
@@ -25,4 +25,11 @@ export async function preparePhoto(file) {
     }
     throw Error('Foto troppo complessa da comprimere. Scegli un’immagine più piccola.');
   } finally { URL.revokeObjectURL(url); }
+}
+
+export function photoBlob(photo) {
+  if (!validPhotos([photo])) throw Error('Allegato foto non valido.');
+  const [header,base64] = photo.dataUrl.split(',');
+  const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+  return new Blob([bytes], {type:header.slice(5).split(';')[0]});
 }

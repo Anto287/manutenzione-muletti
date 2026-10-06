@@ -31,3 +31,6 @@ test('rifiuta allegati attivi, formati invalidi, troppe foto o foto troppo grand
   const n=complete(data(),'v',['t'],{...entry,photos:[]});n.history[0].photos=photos;assert.throws(()=>validateBackup(n));
  }
 });
+
+import {photoBlob} from '../src/photos.js';
+test('photos convert to binary without network requests, respecting strict CSP',async()=>{const b=photoBlob({name:'test.jpg',dataUrl:'data:image/jpeg;base64,/9j/AAAA'});assert.equal(b.type,'image/jpeg');assert.equal(b.size,6);assert.throws(()=>photoBlob({name:'test',dataUrl:'data:image/svg+xml;base64,AAAA'}))});

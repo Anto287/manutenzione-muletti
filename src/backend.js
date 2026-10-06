@@ -6,7 +6,7 @@ export class LiftCareBackend {
     if (!publishableKey) throw Error('Chiave pubblica Supabase mancante.');
     this.url = parsed.origin;
     this.key = publishableKey;
-    this.fetch = fetcher;
+    this.fetch = (...args) => fetcher.call(globalThis, ...args);
     this.session = null; // Caller decides session persistence. No silent localStorage writes.
   }
   async request(path, {method = 'GET', body, headers = {}, authenticated = true} = {}) {
@@ -65,10 +65,13 @@ export class LiftCareBackend {
     if (!['machines','maintenance_plans'].includes(table)) throw Error('Risorsa non eliminabile.');
     return this.request(`/rest/v1/${table}?id=eq.${encodeURIComponent(id)}`, {method:'DELETE',headers:{Prefer:'return=representation'}});
   }
-  recordService({machineId, planIds, date, reading, cost=0, technician='', notes=''}) {
-    return this.request('/rest/v1/rpc/record_service', {method:'POST',body:{
+  async recordService({machineId, planIds, date, reading, cost=0, technician='', notes=''}) {
+    const result=await this.request('/rest/v1/rpc/record_service', {method:'POST',body:{
       p_machine_id:machineId,p_plan_ids:planIds,p_date:date,p_reading:reading,p_cost:cost,p_technician:technician,p_notes:notes
     }});
+    const row=Array.isArray(result)?result[0]:result;
+    if(!row?.id)throw Error('Risposta intervento non valida: aggiorna l’archivio prima di riprovare.');
+    return row;
   }
   photoPath(serviceId, slot, extension) {
     if (!this.session?.user?.id) throw Error('Accesso richiesto.');
