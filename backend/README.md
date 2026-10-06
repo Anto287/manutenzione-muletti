@@ -11,7 +11,7 @@ LiftCare è collegato al progetto Supabase `tkugxpgljwcnndjsmhjq`. Organizzazion
 
 Le autorizzazioni sono in tabelle private, non in `user_metadata`. Ogni richiesta dati applica un controllo preliminare e RLS. Le foto applicano RLS separatamente. Un utente revocato non può continuare a usare il token precedente; dopo logout la sessione viene verificata nella tabella Auth e non è più valida per i dati.
 
-Il frontend contiene soltanto una chiave pubblica. Le credenziali di servizio e le password non sono pubblicate. La sessione del browser è in `sessionStorage`, si rinnova e viene rimossa con **Esci**. La sicurezza dipende anche dall’account dell’admin e del progetto: questi controlli non equivalgono a una garanzia di invulnerabilità.
+Il frontend contiene soltanto una chiave pubblica. Le credenziali di servizio e le password non sono pubblicate. La sessione del browser è persistente in `localStorage`: rimane disponibile dopo la chiusura e si rinnova automaticamente. **Esci** elimina la sessione memorizzata e revoca quella server. Le sessioni precedenti in `sessionStorage` vengono migrate automaticamente; refresh simultanei tra schede usano Web Locks e un errore di rete non cancella il refresh token. Le password non sono memorizzate. La sicurezza dipende anche dall’account dell’admin e del progetto: questi controlli non equivalgono a una garanzia di invulnerabilità.
 
 ## API
 

@@ -1,12 +1,11 @@
-import {photoBlob} from './photos.js?v=8';
-import {LiftCareBackend} from './backend.js?v=8';
-import {validateBackup} from './domain.js?v=8';
+import {createSessionManager,SESSION_KEY} from './session.js?v=9';
+export {SESSION_KEY};
+import {photoBlob} from './photos.js?v=9';
+import {LiftCareBackend} from './backend.js?v=9';
+import {validateBackup} from './domain.js?v=9';
 export const api=new LiftCareBackend({url:'https://tkugxpgljwcnndjsmhjq.supabase.co',publishableKey:'sb_publishable_SeENF7vcFSV73GPFmvNGWw_DkBQ7xla'});
-const SESSION='liftcare-session-v1';
-export function saveSession(){if(api.session)sessionStorage.setItem(SESSION,JSON.stringify(api.session));else sessionStorage.removeItem(SESSION)}
-export async function restoreSession(){try{api.session=JSON.parse(sessionStorage.getItem(SESSION)||'null');if(api.session){await api.refreshSession();saveSession()}}catch{api.session=null;saveSession()}}
-let refreshing;
-export async function ensureSession(){if(!api.session)throw Error('Accedi per usare il tuo archivio online.');if(!api.session.expires_at||api.session.expires_at*1000<Date.now()+60000){refreshing??=api.refreshSession().then(saveSession).catch(e=>{api.session=null;saveSession();throw e}).finally(()=>{refreshing=null});await refreshing}}
+const sessions=createSessionManager({api,storage:globalThis.localStorage,legacyStorage:globalThis.sessionStorage,locks:globalThis.navigator?.locks});
+export const saveSession=sessions.save,clearSavedSession=sessions.clear,restoreSession=sessions.restore,ensureSession=sessions.ensure;
 async function all(table){let result=[],offset=0;for(;;){const page=await api.list(table,{offset,limit:1000});result.push(...page);if(page.length<1000)return result;offset+=page.length}}
 export async function loadCloud(){await ensureSession();const [machines,plans,records,inventory,deadlines,preferences]=await Promise.all([all('machines'),all('maintenance_plans'),all('service_records'),api.request('/rest/v1/rpc/photo_inventory',{method:'POST',body:{}}),all('vehicle_deadlines'),api.request('/rest/v1/rpc/reminder_status',{method:'POST',body:{}})]);const history=[];for(const h of records){const photos=inventory[h.id]||[];history.push({id:h.id,vehicleId:h.machine_id,vehicleName:h.machine_name,vehicleType:h.machine_type,unit:h.unit,date:h.date,reading:Number(h.reading),cost:Number(h.cost),technician:h.technician,notes:h.notes,items:h.items,photos:[],photoFiles:photos});}history.sort((a,b)=>b.date.localeCompare(a.date));return validateBackup({version:2,deadlines:deadlines.map(d=>({id:d.id,vehicleId:d.machine_id,kind:d.kind,dueDate:d.due_date,notify:d.notify,notes:d.notes})),emailNotifications:preferences.enabled,vehicles:machines.map(({id,name,type,model,serial,plate,power,unit,reading})=>({id,name,type,model,serial,plate,power,unit,reading:Number(reading)})),tasks:plans.map(p=>({id:p.id,vehicleId:p.machine_id,name:p.name,part:p.part,interval:Number(p.interval),months:p.months,lastReading:Number(p.last_reading),lastDate:p.last_date})),history})}
 const machine=v=>({id:v.id,name:v.name,type:v.type,model:v.model,serial:v.serial,plate:v.plate,power:v.power,unit:v.unit,reading:v.reading});
