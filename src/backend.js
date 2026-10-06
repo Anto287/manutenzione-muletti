@@ -13,6 +13,7 @@ export class LiftCareBackend {
     if (authenticated && !this.session?.access_token) throw Error('Accedi prima di usare il backend.');
     const response = await this.fetch(this.url + path, {
       method,
+      signal: AbortSignal.timeout(20000),
       headers: {apikey: this.key, ...(this.session?.access_token ? {Authorization: `Bearer ${this.session.access_token}`} : {}),
         ...(body === undefined ? {} : {'Content-Type': 'application/json'}), ...headers},
       ...(body === undefined ? {} : {body: body instanceof Blob ? body : JSON.stringify(body)})
@@ -29,7 +30,7 @@ export class LiftCareBackend {
   }
   async signIn(email, password) {
     const session = await this.request('/auth/v1/token?grant_type=password', {method:'POST', body:{email,password}, authenticated:false});
-    this.session = session;
+    this.session = {...session,expires_at:Math.floor(Date.now()/1000)+session.expires_in};
     return session.user;
   }
   async refreshSession() {
@@ -37,6 +38,7 @@ export class LiftCareBackend {
     this.session = await this.request('/auth/v1/token?grant_type=refresh_token', {
       method:'POST',body:{refresh_token:this.session.refresh_token},authenticated:false
     });
+    this.session.expires_at=Math.floor(Date.now()/1000)+this.session.expires_in;
     return this.session.user;
   }
   async signOut() {

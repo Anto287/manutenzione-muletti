@@ -1,6 +1,7 @@
 # Backend LiftCare — gestione macchinari
 
-Backend Supabase PostgreSQL + Auth + Storage. Non richiede un server Node acceso; la REST API viene generata da Supabase. Il sito GitHub Pages resta compatibile. **Questa aggiunta non attiva la sincronizzazione dell'interfaccia esistente**: `src/backend.js` è l'adattatore pronto per il collegamento; `src/app.js` continua a salvare localmente finché non viene integrato il login e il flusso cloud.
+Backend Supabase PostgreSQL + Auth + Storage. Non richiede un server Node acceso; la REST API viene generata da Supabase. Il sito GitHub Pages resta compatibile. L’interfaccia è ora collegata tramite `src/cloud.js`: login, rinnovo della sessione, salvataggio online, approvazioni admin, importazione iniziale e backup con foto. Le migrazioni 001–004 sono applicate al progetto LiftCare. **Le notifiche email restano in coda finché il servizio di invio non viene configurato.**
+
 
 ## Attivazione
 
@@ -47,3 +48,11 @@ L'archivio locale non viene toccato. Gli ID testuali delle tabelle accettano gli
 ## Verifica
 
 `npm test` esegue anche i test dell'adattatore REST. `node backend/check-database.mjs` verifica la migrazione e i controlli usando PostgreSQL WASM (PGlite); richiede `@electric-sql/pglite` in un ambiente di test, senza dipendenze aggiunte al sito. Lo Storage mock nei test verifica le policy SQL, non sostituisce una prova di upload sul vero servizio Supabase. Dopo l'attivazione eseguire una prova con due utenti e una richiesta non autenticata, oltre a upload, firma e cancellazione delle foto.
+
+## Approvazione e sicurezza
+
+Le funzioni privilegiate sono nello schema `private`, non esposto alla Data API. Le RPC pubbliche sono wrapper SECURITY INVOKER con concessioni esplicite. `private.app_members` conserva approvazione e ruolo admin; nessun client può scriverla direttamente. Solo l’admin approvato può usare `set_user_approval`. L’identità admin è in `private.admin_emails` e viene riconosciuta solo dopo conferma email; non viene pubblicata nella configurazione del sito. La registrazione di un utente verificato crea la richiesta e la voce nella coda email. Non aggiungere indirizzi admin non verificati.
+
+Un hook PostgREST controlla le richieste dati: 401 senza autenticazione, 403 senza approvazione. `access_status` è l’eccezione necessaria per mostrare la schermata di attesa; restituisce solo lo stato dell’utente chiamante. Le policy restrictive richiedono approvazione anche per Storage. Le immagini nell’interfaccia si scaricano con Bearer token; non si usano link pubblici o firmati persistenti. La revoca viene letta dal database a ogni richiesta. I byte già scaricati non possono essere revocati dal dispositivo.
+
+Verificati sul progetto reale: isolamento tra due utenti, divieto di autoapprovazione, approvazione e revoca immediata, 401 HTTP con la sola chiave pubblica. Test di integrazione DOM con API simulate: login, creazione mezzo/piano, schermata di attesa dopo revoca e logout. Il browser Chromium non è disponibile nell’ambiente; resta da verificare l’intero ciclo reale di registrazione e consegna email con l’account dell’admin.

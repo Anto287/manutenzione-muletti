@@ -1,0 +1,10 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {api,loadCloud,saveChanges,ensureSession} from '../src/cloud.js';
+const records=[];
+const fixture={machines:[{id:'m1',name:'Trattore',type:'tractor',model:'T',plate:'',serial:'',power:'Diesel',unit:'h',reading:'12.5'}],maintenance_plans:[{id:'p1',machine_id:'m1',name:'Filtro',part:'F',interval:'100',months:12,last_reading:'10',last_date:'2026-01-01'}],service_records:records};
+api.session={access_token:'fake-test-token',expires_at:Date.now()/1000+3600,user:{id:'owner'}};
+api.fetch=async(url,options)=>{const path=new URL(url).pathname;if(path.startsWith('/rest/v1/')){const table=path.split('/')[3];if(options.method==='PATCH'){fixture[table][0]={...fixture[table][0],...JSON.parse(options.body)};}return new Response(JSON.stringify(fixture[table]),{status:200})}throw Error('Unexpected request '+path)};
+test('cloud converts database numeric values and maps plan references',async()=>{const d=await loadCloud();assert.equal(d.vehicles[0].reading,12.5);assert.equal(d.tasks[0].vehicleId,'m1');assert.equal(d.tasks[0].lastReading,10)});
+test('cloud saves changed machine without mutating immutable history',async()=>{const d=await loadCloud();const next=structuredClone(d);next.vehicles[0].reading=13;assert.equal((await saveChanges(d,next)).vehicles[0].reading,13);next.history.push({});await assert.rejects(saveChanges(d,next));});
+test('cloud requires an authenticated session',async()=>{const session=api.session;api.session=null;await assert.rejects(ensureSession(),/Accedi/);api.session=session});
