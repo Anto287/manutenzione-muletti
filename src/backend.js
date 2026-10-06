@@ -65,8 +65,9 @@ export class LiftCareBackend {
     if (!['machines','maintenance_plans'].includes(table)) throw Error('Risorsa non eliminabile.');
     return this.request(`/rest/v1/${table}?id=eq.${encodeURIComponent(id)}`, {method:'DELETE',headers:{Prefer:'return=representation'}});
   }
-  async recordService({machineId, planIds, date, reading, cost=0, technician='', notes=''}) {
-    const result=await this.request('/rest/v1/rpc/record_service', {method:'POST',body:{
+  async recordService({machineId, planIds, date, reading, cost=0, technician='', notes='', items=[]}) {
+    const result=await this.request('/rest/v1/rpc/'+(items.length?'record_completed_work':'record_service'), {method:'POST',body:{
+      ...(items.length?{p_items:items}:{}),
       p_machine_id:machineId,p_plan_ids:planIds,p_date:date,p_reading:reading,p_cost:cost,p_technician:technician,p_notes:notes
     }});
     const row=Array.isArray(result)?result[0]:result;

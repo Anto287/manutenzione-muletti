@@ -4,3 +4,5 @@
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 
 #auth-error.success-message{color:var(--teal);background:#eaf5eb;padding:13px;border-radius:10px}
+
+.intent-switch{display:grid;gap:10px;padding:16px;background:#eaf5eb;border:1px solid #d0e4d6;border-radius:13px;font-size:.85rem}.intent-switch button{color:var(--teal);border-color:#a5c8b4}.work-checks{display:grid;grid-template-columns:1fr 1fr;gap:7px}.work-checks .check{padding:12px!important;border:1px solid var(--border);border-radius:11px;min-height:55px;font-size:.8rem}.work-checks .check:has(input:checked){background:#eaf5eb;border-color:#82b79c}.work-checks .check input{width:21px!important}.custom-work{margin:14px 0}.custom-work summary{cursor:pointer;padding:12px 0;font-size:.8rem;color:var(--teal)}.custom-work label{margin:12px 0}.custom-work button{width:100%}@media(max-width:450px){.work-checks{grid-template-columns:1fr}}

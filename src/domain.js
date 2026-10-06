@@ -31,7 +31,9 @@ export function due(task, vehicle, date = today()) {
 }
 export function complete(data, vehicleId, taskIds, entry) {
   const vehicle = data.vehicles.find(v => v.id === vehicleId);
-  if (!vehicle || !taskIds.length) throw Error('Seleziona almeno un intervento.');
+  const extras=entry.items??[];
+  if (!Array.isArray(extras)||extras.length>40||extras.some(i=>!i||typeof i.name!=='string'||!i.name.trim()||i.name.length>100||typeof i.part!=='string'||i.part.length>120)||new Set(extras.map(i=>i.name.trim().toLowerCase())).size!==extras.length) throw Error('Lavori aggiunti non validi.');
+  if (!vehicle || !(taskIds.length+extras.length)) throw Error('Seleziona almeno un intervento.');
   if (!num(entry.reading) || entry.reading < vehicle.reading) throw Error('Il contatore non può essere inferiore al valore attuale.');
   if (vehicle.unit === 'km' && !Number.isInteger(entry.reading)) throw Error('Inserisci chilometri interi.');
   if (!validDate(entry.date) || entry.date > today()) throw Error('Inserisci una data valida, non futura.');
@@ -43,7 +45,7 @@ export function complete(data, vehicleId, taskIds, entry) {
   const result = structuredClone(data);
   result.vehicles.find(v => v.id === vehicleId).reading = entry.reading;
   result.tasks.filter(t => taskIds.includes(t.id)).forEach(t => { t.lastReading = entry.reading; t.lastDate = entry.date; });
-  result.history.unshift({ ...entry, id: crypto.randomUUID(), vehicleId, vehicleName: vehicle.name, vehicleType: vehicle.type, unit: vehicle.unit, items: tasks.map(t => ({ name: t.name, part: t.part })) });
+  result.history.unshift({ ...entry, id: crypto.randomUUID(), vehicleId, vehicleName: vehicle.name, vehicleType: vehicle.type, unit: vehicle.unit, items: [...tasks.map(t => ({ name: t.name, part: t.part })),...extras.map(i=>({name:i.name.trim(),part:i.part.trim()}))] });
   return result;
 }
 function validateV1(d) {

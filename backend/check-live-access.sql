@@ -19,6 +19,13 @@ end$$;
 insert into public.machines(id,name,type,unit,reading) values('live-test','Test rollback','tractor','h',100);
 insert into public.maintenance_plans(id,machine_id,name,interval,last_reading,last_date) values('live-plan','live-test','Filtro gasolio',250,100,'2026-01-01');
 select public.record_service('live-test',array['live-plan'],'2026-01-02',110,10,'Test','Test rollback');
+do $$declare result public.service_records;begin
+ result:=public.record_completed_work('live-test',array[]::text[],'2026-01-02',110,0,'Test','Photo work','[{"name":"Filtro aria","part":"AIR1"},{"name":"Filtro olio","part":"OIL1"}]'::jsonb);
+ if jsonb_array_length(result.items)<>2 then raise exception 'Standalone work failed';end if;
+ if (select last_reading from public.maintenance_plans where id='live-plan')<>110 then raise exception 'Unselected plan changed';end if;
+ begin perform public.record_completed_work('live-test',array[]::text[],'2026-01-02',110,0,'','','[]');raise exception 'Empty work allowed';exception when raise_exception then if sqlerrm='Empty work allowed' then raise;end if;end;
+end$$;
+
 do $$begin
  if (select reading from public.machines where id='live-test')<>110 then raise exception 'Transaction failed';end if;
  if public.photo_usage()->>'used_bytes' is null then raise exception 'Usage failed';end if;
