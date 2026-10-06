@@ -63,3 +63,20 @@ La migrazione `admin_registration_email` aggiunge un limite privato per gli invi
 Il link contiene `token_hash` nel frammento dell’URL; `src/auth.js` rimuove subito il frammento e usa `/auth/v1/verify`. La sessione viene accettata solo dopo verifica. Email confermata e indirizzo nella lista privata restano necessari per il bootstrap admin. Il mittente di prova è utilizzabile nel progetto attuale perché il test al destinatario admin è stato consegnato. Le conferme a utenti esterni restano un percorso separato che richiede SMTP e dominio verificato.
 
 Entrambi i worker sono pubblicati; la chiave `sending_access` è configurata in Vault e non è versionata. Non sono stati acquistati domini né attivati piani a pagamento.
+
+
+## Scadenze e promemoria gratuiti con Gmail
+
+`vehicle_deadlines` contiene revisione, bollo e assicurazione con data esplicita, note e consenso per scadenza. RLS verifica proprietario, approvazione e sessione attiva. I backup v2 precedenti rimangono compatibili; quelli nuovi includono scadenze e preferenza email.
+
+Il cron `liftcare-deadline-reminders` controlla ogni 15 minuti: dalla prima esecuzione delle 9:00 Europe/Rome genera al massimo un riepilogo al giorno per account, alle soglie 30, 7, 1, 0 e -7 giorni. Se una scadenza viene inserita già dentro una finestra, il primo riepilogo usa la soglia corrente. Il rinnovo della data, la disattivazione e la revoca dell’account annullano gli avvisi in coda. Il destinatario è sempre letto da Supabase Auth, mai dal modulo della scadenza.
+
+Per attivare l’invio senza dominio a pagamento: l’admin Gmail apre **Account e backup → Notifiche email**, attiva la verifica in due passaggi Google, genera una password per app chiamata LiftCare e la inserisce nel modulo. Usare esclusivamente la password per app; mai la password normale o segreti nella chat. Il valore viene cifrato in Vault e non compare nello stato, nei backup, nei log o nella repository. Il collegamento invia una prova all’account admin; ogni utente può richiedere la propria prova e disattivare i promemoria. Nessuna credenziale Gmail è inclusa nel progetto o impostata automaticamente.
+
+Il worker `deadline-email` usa SMTP Gmail su TLS porta 465. La connessione al server è stata verificata; la prova di autenticazione e consegna richiede la configurazione Gmail. HTML e testo sono inclusi, senza tracker, allegati o pubblicità. SPF/DKIM per il mittente Gmail sono gestiti da Google; il recapito nella posta in arrivo non è garantibile. Eventuali rifiuti permanenti interrompono il retry; esiti SMTP incerti e crash non vengono reinviati automaticamente per evitare duplicati. Il riepilogo e le credenziali sono visibili solo al worker autenticato con token privato + service role. Un controllo SMTP autenticato separato non prende in carico i messaggi.
+
+Lo stesso Gmail configurato abilita le conferme degli account esterni nel worker `registration-email`, senza necessità di un dominio personalizzato o di modificare SMTP Auth. L’admin resta tenuto ad approvare ogni nuovo utente. Senza Gmail rimane il percorso Resend di prova per l’admin, con il flusso Supabase standard per gli altri indirizzi.
+
+Il budget server è condiviso: 50 tentativi/24 ore per Gmail, al massimo 20 conferme, al massimo 5 conferme/giorno/indirizzo con attesa di 60 secondi. Le credenziali non vengono esposte ai destinatari. I messaggi restano in coda se il budget è esaurito. Nessun servizio a pagamento viene attivato.
+
+`backend/check-deadlines.sql` verifica in rollback isolamento, revoca, config Vault, riepiloghi, deduplicazione, rinnovo, opt-out, quote condivise e importazione dei backup. `npm test` include template e gestione dei fallimenti dei worker.

@@ -46,12 +46,12 @@ export class LiftCareBackend {
     finally { this.session = null; }
   }
   async list(table, {offset=0, limit=100} = {}) {
-    if (!['machines','maintenance_plans','service_records'].includes(table)) throw Error('Risorsa non valida.');
+    if (!['machines','maintenance_plans','vehicle_deadlines','service_records','vehicle_deadlines'].includes(table)) throw Error('Risorsa non valida.');
     if (!Number.isInteger(offset) || offset<0 || !Number.isInteger(limit) || limit<1 || limit>1000) throw Error('Paginazione non valida.');
     return this.request(`/rest/v1/${table}?select=*&order=id&offset=${offset}&limit=${limit}`);
   }
   async write(table, values, id) {
-    if (!['machines','maintenance_plans'].includes(table)) throw Error('Risorsa non modificabile.');
+    if (!['machines','maintenance_plans','vehicle_deadlines'].includes(table)) throw Error('Risorsa non modificabile.');
     if ('owner_id' in values || 'created_at' in values || (id && 'id' in values)) throw Error('Campi di sistema non modificabili.');
     const rows = await this.request(`/rest/v1/${table}${id ? `?id=eq.${encodeURIComponent(id)}` : ''}`, {
       method:id?'PATCH':'POST',body:values,headers:{Prefer:'return=representation'}
@@ -62,7 +62,7 @@ export class LiftCareBackend {
   saveMachine(values, id) { return this.write('machines', values, id); }
   savePlan(values, id) { return this.write('maintenance_plans', values, id); }
   async remove(table, id) {
-    if (!['machines','maintenance_plans'].includes(table)) throw Error('Risorsa non eliminabile.');
+    if (!['machines','maintenance_plans','vehicle_deadlines'].includes(table)) throw Error('Risorsa non eliminabile.');
     return this.request(`/rest/v1/${table}?id=eq.${encodeURIComponent(id)}`, {method:'DELETE',headers:{Prefer:'return=representation'}});
   }
   async recordService({machineId, planIds, date, reading, cost=0, technician='', notes='', items=[]}) {

@@ -1,3 +1,4 @@
+import {validateDeadlines} from './deadlines.js?v=8';
 export const today = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -73,6 +74,8 @@ export function validateBackup(d) {
   if (ids.size !== d.vehicles.length || new Set(d.tasks.map(t => t.id)).size !== d.tasks.length) throw Error('Identificativi duplicati.');
   if (d.tasks.some(t => !identifier(t.id) || !ids.has(t.vehicleId) || !str(t.name) || !str(t.part) || !num(t.interval) || !num(t.months) || !Number.isInteger(t.months) || !(t.interval || t.months) || !num(t.lastReading) || !validDate(t.lastDate) || t.lastReading > d.vehicles.find(v => v.id === t.vehicleId).reading || (d.vehicles.find(v => v.id === t.vehicleId).unit === 'km' && (!Number.isInteger(t.interval) || !Number.isInteger(t.lastReading))))) throw Error('Piano non valido.');
   if (d.history.some(h => !identifier(h.id) || !str(h.vehicleName) || !ids.has(h.vehicleId) || !validDate(h.date) || !num(h.reading) || !['h', 'km'].includes(h.unit) || !Object.hasOwn(vehicleTypes, h.vehicleType) || !num(h.cost) || !str(h.technician) || !str(h.notes) || !validPhotos(h.photos) || !Array.isArray(h.items) || h.items.some(i => !str(i.name) || !str(i.part)))) throw Error('Storico non valido.');
-  return d;
+  validateDeadlines(d.deadlines??[],d.vehicles);
+  if(d.emailNotifications!==undefined&&typeof d.emailNotifications!=='boolean')throw Error('Preferenze email non valide.');
+  return d.deadlines!==undefined&&d.emailNotifications!==undefined?d:{...d,deadlines:d.deadlines??[],emailNotifications:d.emailNotifications??true};
 }
-export const blank = () => ({ version: 2, vehicles: [], tasks: [], history: [] });
+export const blank = () => ({ version: 2, vehicles: [], tasks: [], history: [], deadlines: [], emailNotifications:true });
