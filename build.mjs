@@ -1,2 +1,12 @@
-import {mkdir,copyFile,cp,rm} from 'node:fs/promises';
-await rm('dist',{recursive:true,force:true});await mkdir('dist');await copyFile('index.html','dist/index.html');await cp('src','dist/src',{recursive:true});console.log('Build pronto in dist/');
+import {mkdir,copyFile,cp,rm,readdir,readFile,writeFile} from 'node:fs/promises';
+import {createHash} from 'node:crypto';
+await rm('dist',{recursive:true,force:true});await mkdir('dist');
+for(const file of ['index.html','manifest.webmanifest'])await copyFile(file,`dist/${file}`);
+await cp('src','dist/src',{recursive:true});await cp('icons','dist/icons',{recursive:true});
+const files=['index.html','manifest.webmanifest',...(await readdir('src')).filter(f=>/\.(js|css)$/.test(f)).map(f=>`src/${f}`),...(await readdir('icons')).map(f=>`icons/${f}`)].sort();
+const hash=createHash('sha256');
+for(const file of files)hash.update(file).update(await readFile(`dist/${file}`));
+const source=await readFile('sw.js','utf8');hash.update(source);
+const worker=source.replace('__BUILD_VERSION__',hash.digest('hex').slice(0,16)).replace('/*__PRECACHE__*/[]',JSON.stringify(files));
+await writeFile('dist/sw.js',worker);
+console.log('Build pronto in dist/, con app installabile e cache versionata.');
